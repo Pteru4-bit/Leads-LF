@@ -56,8 +56,15 @@ const EMAIL_PHOTO_THUMBS = false;      // true → ще й мініатюри в
 // (меню → «Режим листів…», «Вказати URL…»): зміна не потребує нового розгортання.
 // Тестовий режим за замовчуванням УВІМКНЕНО.
 const WEB_APP_URL_DEFAULT = '';        // можна вписати …/exec і тут, але зручніше через меню
-const WEB_APP_DOMAIN = 'novaposhta.ua'; // адреса форми завжди у вигляді …/a/macros/<домен>/s/…/exec —
-                                        // так Google відкриває її робочим акаунтом, навіть якщо в браузері їх кілька
+// Доступ до форми задається в розгортанні веб-застосунку: «Виконувати як: Я», «Хто має доступ: …».
+// Кілька акаунтів Google у браузері веб-застосунки не підтримують: якщо доступ лише для домену,
+// а основний акаунт на телефоні — особистий, замість форми Google показує «Не вдається відкрити файл».
+//  ''              — доступ «Будь-хто»: форма відкривається без входу в Google, хоч із кількома
+//                    акаунтами. Адреса …/macros/s/…/exec; захист — Token у посиланні. Google не
+//                    повідомляє, хто відкрив форму, тож «Хто» в журналі для дій із форми порожнє.
+//  'novaposhta.ua' — доступ лише «Усі в <домен>». Адреса …/a/macros/<домен>/s/…/exec; у листі —
+//                    підказка, як відкрити форму, якщо в браузері кілька акаунтів.
+const WEB_APP_DOMAIN = '';
 
 // ---- Щоденний звіт ----
 const REPORTS_ENABLED = true;
@@ -254,13 +261,15 @@ function webAppUrl_() {
   try { const u = ScriptApp.getService().getUrl(); if (u && /\/exec$/.test(u)) return normalizeWebAppUrl_(u); } catch (e) { /* немає */ }
   return '';
 }
-// …/macros/s/ID/exec або …/u/1/a/macros/<домен>/s/ID/exec → …/a/macros/<домен>/s/ID/exec
+// …/macros/s/ID/exec, …/u/1/a/macros/<домен>/s/ID/exec, …/a/<домен>/macros/s/ID/exec →
+//   доступ «Будь-хто» (WEB_APP_DOMAIN порожній): …/macros/s/ID/exec — адреса з доменом може вимагати входу робочим акаунтом;
+//   доступ для домену: …/a/macros/<домен>/s/ID/exec
 function normalizeWebAppUrl_(url) {
   const u = str_(url).trim().replace(/\/u\/\d+\//, '/');
-  const m = u.match(/^https:\/\/script\.google\.com\/(?:a\/macros\/([^\/]+)|macros)\/s\/([^\/?#]+)\/exec/);
+  const m = u.match(/^https:\/\/script\.google\.com\/(?:a\/macros\/([^\/]+)|a\/([^\/]+)\/macros|macros)\/s\/([^\/?#]+)\/exec/);
   if (!m) return u;
-  const domain = m[1] || WEB_APP_DOMAIN;
-  return domain ? 'https://script.google.com/a/macros/' + domain + '/s/' + m[2] + '/exec' : u;
+  const domain = WEB_APP_DOMAIN ? (m[1] || m[2] || WEB_APP_DOMAIN) : '';
+  return 'https://script.google.com/' + (domain ? 'a/macros/' + domain : 'macros') + '/s/' + m[3] + '/exec';
 }
 function errText_(err) { return err && err.message ? err.message : str_(err); }
 
@@ -1008,7 +1017,11 @@ function leadEmailHtml_(lead, o) {
     '<div style="margin-top:20px;">' +
     emailBtn_(formUrl_(lead.token, 'result'), 'Вказати результат', '#185FA5', '#ffffff') +
     emailBtn_(formUrl_(lead.token, 'respawn'), 'Змінити відповідального', '#ffffff', '#185FA5') +
-    '</div></div>' +
+    '</div>' + (WEB_APP_DOMAIN
+      ? '<p style="margin:4px 0 0;font-size:12px;color:#888;">Замість форми — «Не вдається відкрити файл»? Так буває, коли в браузері ' +
+        'кілька акаунтів Google: утримуйте кнопку, скопіюйте посилання й відкрийте його в режимі інкогніто, увійшовши робочим акаунтом.</p>'
+      : '') +
+    '</div>' +
     '<div style="padding:12px 20px;background:#f5f5f0;border-top:1px solid #eee;">' +
     '<p style="margin:0;font-size:12px;color:#999;">Автоматичне сповіщення · Відділ аудиту та обліку стандарту середовища</p></div></div>';
 }
