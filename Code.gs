@@ -386,26 +386,41 @@ function setupStatusDropdown() {
 }
 
 // ============================================================
-//  ВЕБ-ФОРМА (через google.script.run — Form.html)
+//  ВЕБ-ФОРМА (Form.html)
 // ============================================================
+// Збереження — переходом за посиланням (GET) на ту саму адресу, якою форма відкривається з листа.
+// google.script.run при кількох акаунтах Google у браузері виконується від «основного» акаунта і падає,
+// навіть коли форма відкрилася під корпоративним; перехід за посиланням іде тим самим акаунтом, що й відкриття.
 function doGet(e) {
-  const token  = (e && e.parameter && e.parameter.key)    ? e.parameter.key    : '';
-  const action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'respawn';
-  const key = decKey_(token);
+  const p = (e && e.parameter) || {};
+  const token = p.key || '';
+  const action = (p.act || p.action) === 'result' ? 'result' : 'respawn';
+  if (p.save) {
+    const res = saveForm({ token: token, action: action, mrm: p.mrm, result: p.result, comment: p.comment, base: p.base });
+    return renderForm_(token, action, res, res.ok ? null : p);
+  }
+  return renderForm_(token, action, null, null);
+}
+
+// Сторінка: форма, «Збережено» (result.ok) або знову форма — з помилкою та вже введеними значеннями (prefill)
+function renderForm_(token, action, result, prefill) {
+  const t = HtmlService.createTemplateFromFile('Form');
+  t.token = token;
+  t.action = action;
+  t.postUrl = WEB_APP_URL;
+  t.againUrl = formUrl_(token, action);
+  t.done = (result && result.ok) ? result : null;
+  t.error = (result && !result.ok) ? result.message : '';
+  t.statuses = statusOptions_();
+  t.mrmNames = [];
+  t.notFound = true;
+  t.lead = {}; t.cur = { mrm:'', result:'', comment:'' }; t.base = '';
+
+  const key = t.done ? '' : decKey_(token);
   const ss = SpreadsheetApp.getActive();
   const sh = ss.getSheetByName(CFG.sheetName);
   const row = key ? findLeadRowByKey_(sh, key) : -1;
-
-  const t = HtmlService.createTemplateFromFile('Form');
-  t.notFound = (row === -1);
-  t.token = token;
-  t.action = (action === 'result') ? 'result' : 'respawn';
-  t.statuses = statusOptions_();
-  t.mrmNames = allMrmNames_();
-
-  if (row === -1) {
-    t.lead = {}; t.cur = { mrm:'', result:'', comment:'' };
-  } else {
+  if (row !== -1) {
     const lead = readLead_(sh, row);
     const store = loadStorage_(ss);
     const ov = store.map[key] || ['', '', ''];
@@ -431,11 +446,22 @@ function doGet(e) {
       dateAvail: esc_(aDate), adLink: esc_(lead.adLink), extra: esc_(lead.extra),
       photosRaw: String(lead.photos || '')
     };
-    t.cur = { mrm: ov[0] || '', result: ov[1] || '', comment: ov[2] || '' };
+    t.notFound = false;
+    t.mrmNames = allMrmNames_();
+    t.cur = prefill
+      ? { mrm: String(prefill.mrm || ''), result: String(prefill.result || ''), comment: String(prefill.comment || '') }
+      : { mrm: ov[0] || '', result: ov[1] || '', comment: ov[2] || '' };
+    t.base = stateHash_(ov);
   }
   return t.evaluate()
     .setTitle('Заявка на оренду')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+// Відбиток стану ліда (МРМ, результат, коментар) на момент, коли відкривали форму
+function stateHash_(ov) {
+  const s = [0, 1, 2].map(i => String(ov && ov[i] != null ? ov[i] : '').trim()).join('\u0001');
+  return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, s, Utilities.Charset.UTF_8)).slice(0, 12);
 }
 
 function saveForm(payload) {
@@ -451,12 +477,27 @@ function saveForm(payload) {
   if (row === -1) return { ok: false, message: 'Заявку не знайдено (можливо, запис видалено).' };
 
   const store = loadStorage_(ss);
-  const res = (payload.result || '').trim();
-  const com = (payload.comment || '').trim();
+  const res = String(payload.result || '').trim();
+  const com = String(payload.comment || '').trim();
+  const newMrm = String(payload.mrm || '').trim();
+  if (res && statusOptions_().indexOf(res) === -1) return { ok: false, message: 'Невідомий результат.' };
+  if (action === 'result' && !com) return { ok: false, message: 'Будь ласка, заповніть коментар.' };
+  if (action === 'respawn' && allMrmNames_().indexOf(newMrm) === -1) return { ok: false, message: 'Оберіть МРМ зі списку.' };
+
+  // base — стан ліда, коли відкривали форму. Якщо він уже інший: або цю відповідь записано раніше
+  // (сторінку «Збережено» оновили чи телефон перезавантажив стару вкладку), або заявку тим часом
+  // змінив хтось інший — тоді нічого не затираємо й лист удруге не надсилаємо.
+  const ov = store.map[key] || ['', '', ''];
+  if (payload.base && payload.base !== stateHash_(ov)) {
+    const cur = ov.map(v => String(v == null ? '' : v).trim());
+    const same = (action !== 'respawn' || cur[0] === newMrm) && (!res || cur[1] === res) && (!com || cur[2] === com);
+    if (same) return { ok: true, title: 'Уже збережено', subtitle: 'Цю відповідь записано раніше, повторно її не зберігали.' };
+    return { ok: false, message: 'Заявку змінили, поки форма була відкрита (можливо, ви щойно зберегли її самі). Зараз: МРМ — ' +
+      (cur[0] || 'не призначено') + ', результат — ' + (cur[1] || 'не вказано') + '. Перевірте й натисніть «Зберегти» ще раз.' };
+  }
 
   if (action === 'respawn') {
     const prevMrm = store.map[key] ? store.map[key][0] : ''; // запам'ятовуємо старого МРМ
-    const newMrm = (payload.mrm || '').trim();
     
     setField_(store, key, 0, newMrm);
     if (res) setField_(store, key, 1, res);

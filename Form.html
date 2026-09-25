@@ -41,16 +41,25 @@
   button:disabled { opacity: 0.6; }
   
   .err { margin: 10px 0 0; font-size: 13px; color: #A32D2D; display: none; }
+  .err.show { display: block; }
   
   .ok-msg { text-align: center; padding: 40px 20px; }
   .ok-msg h1 { font-size: 20px; margin: 0 0 8px; color: #1D9E75; }
   .ok-msg p { margin: 0; color: #666; font-size: 15px; }
+  .ok-msg .again { margin-top: 18px; font-size: 14px; }
+  .ok-msg .again a { color: #185FA5; text-decoration: none; }
 </style>
 </head>
 <body>
 
 <div class="wrap">
-  <? if (notFound) { ?>
+  <? if (done) { ?>
+    <div class="ok-msg">
+      <h1><?= done.title ?></h1>
+      <p><?= done.subtitle ?></p>
+      <p class="again"><a href="<?= againUrl ?>" target="_top">Відкрити заявку ще раз</a></p>
+    </div>
+  <? } else if (notFound) { ?>
     <div class="ok-msg"><h1 style="color:#A32D2D;">Заявку не знайдено</h1><p>Можливо, запис видалено.</p></div>
   <? } else { ?>
   
@@ -94,39 +103,35 @@
       <div class="section-title">Фотографії</div>
       <div id="photosContainer"></div>
 
-      <div class="form-box">
+      <form class="form-box" id="saveForm" method="get" action="<?= postUrl ?>" target="_top" accept-charset="UTF-8" novalidate>
+        <input type="hidden" name="key" value="<?= token ?>">
+        <input type="hidden" name="act" value="<?= action ?>">
+        <input type="hidden" name="base" value="<?= base ?>">
+        <input type="hidden" name="save" value="1">
         <? if (action === 'respawn') { ?>
-          <label>Відповідальний МРМ</label>
-          <select id="mrm">
+          <label for="mrm">Відповідальний МРМ</label>
+          <select id="mrm" name="mrm">
             <? for (var i=0; i<mrmNames.length; i++) { ?>
               <option value="<?= mrmNames[i] ?>" <?= (mrmNames[i]===cur.mrm)?'selected':'' ?>><?= mrmNames[i] ?></option>
             <? } ?>
           </select>
         <? } ?>
-        
-        <label>Результат</label>
-        <select id="result">
+
+        <label for="result">Результат</label>
+        <select id="result" name="result">
           <option value="">— оберіть —</option>
           <? for (var j=0; j<statuses.length; j++) { ?>
             <option value="<?= statuses[j] ?>" <?= (statuses[j]===cur.result)?'selected':'' ?>><?= statuses[j] ?></option>
           <? } ?>
         </select>
-        
-        <label>Коментар <?= (action === 'result') ? '*' : '' ?></label>
-        <textarea id="comment" rows="3"><?= cur.comment ?></textarea>
-        
-        <input type="hidden" id="tokenField" value="<?= token ?>">
-        <input type="hidden" id="actionField" value="<?= action ?>">
-        
-        <div class="err" id="errBox"></div>
-        <button id="saveBtn" onclick="submitForm()">Зберегти</button>
-      </div>
+
+        <label for="comment">Коментар <?= (action === 'result') ? '*' : '' ?></label>
+        <textarea id="comment" name="comment" rows="3" maxlength="1000"><?= cur.comment ?></textarea>
+
+        <div class="err<?= error ? ' show' : '' ?>" id="errBox" role="alert"><?= error ?></div>
+        <button type="submit" id="saveBtn">Зберегти</button>
+      </form>
     </div>
-  </div>
-  
-  <div id="doneCard" class="ok-msg" style="display:none;">
-    <h1 id="doneTitle">Збережено</h1>
-    <p id="doneSub"></p>
   </div>
 
   <script>
@@ -151,51 +156,32 @@
       c.innerHTML = html;
     })();
 
-    function submitForm() {
+    // Збереження — перехід за посиланням на адресу форми (див. doGet у Code.gs), не google.script.run
+    (function() {
+      var form = document.getElementById('saveForm');
       var btn = document.getElementById('saveBtn');
       var err = document.getElementById('errBox');
-      err.style.display = 'none';
-
-      var token = document.getElementById('tokenField').value;
-      var action = document.getElementById('actionField').value;
-      var res = document.getElementById('result').value;
       var comEl = document.getElementById('comment');
-      var com = comEl.value;
-      var mrm = action === 'respawn' ? document.getElementById('mrm').value : '';
-
-      if (action === 'result' && !com.trim()) {
-        comEl.className = 'invalid';
-        err.textContent = 'Будь ласка, заповніть коментар.';
-        err.style.display = 'block';
-        return;
-      }
-      comEl.className = '';
-
-      btn.disabled = true;
-      btn.textContent = 'Збереження...';
-
-      google.script.run
-        .withSuccessHandler(function(r) {
-          if (r && r.ok) {
-            document.getElementById('mainCard').style.display = 'none';
-            document.getElementById('doneTitle').textContent = r.title;
-            document.getElementById('doneSub').textContent = r.subtitle;
-            document.getElementById('doneCard').style.display = 'block';
-          } else {
-            err.textContent = r.message || 'Помилка збереження';
-            err.style.display = 'block';
-            btn.disabled = false;
-            btn.textContent = 'Зберегти';
-          }
-        })
-        .withFailureHandler(function(e) {
-          err.textContent = e.message || String(e);
+      var action = form.elements['act'].value;
+      form.addEventListener('submit', function(ev) {
+        if (btn.disabled) { ev.preventDefault(); return; }
+        if (action === 'result' && !comEl.value.trim()) {
+          ev.preventDefault();
+          comEl.className = 'invalid';
+          err.textContent = 'Будь ласка, заповніть коментар.';
           err.style.display = 'block';
-          btn.disabled = false;
-          btn.textContent = 'Зберегти';
-        })
-        .saveForm({ token: token, action: action, result: res, comment: com, mrm: mrm });
-    }
+          comEl.focus();
+          return;
+        }
+        comEl.className = '';
+        err.style.display = 'none';
+        setTimeout(function() { btn.disabled = true; btn.textContent = 'Збереження...'; }, 0);
+      });
+      // «Назад» зі сторінки «Збережено» — кнопка знову активна
+      window.addEventListener('pageshow', function(e) {
+        if (e.persisted) { btn.disabled = false; btn.textContent = 'Зберегти'; }
+      });
+    })();
   </script>
   <? } ?>
 </div>
