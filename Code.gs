@@ -24,7 +24,11 @@ const MRM   = { terrSheet: 'Територія МРМ' };
 const MRM_EMAIL_COL = 3;
 
 // ---- Веб-форма / листи ----
-const WEB_APP_URL = 'https://script.google.com/a/macros/novaposhta.ua/s/AKfycbxqIdWc5wIcyjgMX9bGySsM9JpHQD62VQAudjFwofSVMljMF2j7sIixxCz-jODr0nQZ/exec'; 
+// Розгортання веб-застосунку: «Виконувати як: Я», «Хто має доступ: Будь-хто» — форма відкривається без входу
+// в Google. Інакше Google відкриває її основним акаунтом браузера, і якщо на телефоні той особистий —
+// «На жаль, зараз не вдається відкрити файл». Адреса — без /a/macros/novaposhta.ua/: з доменом Google може
+// все одно вимагати робочий акаунт. (Якщо доступ лише для Нової пошти — …/a/macros/novaposhta.ua/s/<ID>/exec.)
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxqIdWc5wIcyjgMX9bGySsM9JpHQD62VQAudjFwofSVMljMF2j7sIixxCz-jODr0nQZ/exec';
 const EMAILS_ENABLED = true;
 const TEST_MODE = false;
 const TEST_EMAIL = 'gurin.vv@novaposhta.ua';
@@ -79,6 +83,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('🔄 Скрипт МРМ')
     .addItem('Перебудувати робочі (зараз)', 'rebuildWorking')
+    .addItem('✉ Надіслати лист по виділеному рядку', 'sendSelectedLeads')
     .addItem('Налаштувати статуси (B)', 'setupStatusDropdown')
     .addSeparator()
     .addItem('ТЕСТ: лист по останньому ліду', 'testSendLastLead')
@@ -627,6 +632,59 @@ function notifyNewLeads_(ss, sh, keys, mrmByRow) {
     const lead = readLead_(sh, row);
     try { if (sendNewLeadEmail_(lead, encKey_(key), mrmName)) markSent_(sent, key); } catch (err) {}
   }
+}
+
+// ---------- Лист по виділених рядках (меню) ----------
+// Лист про лід — МРМ із колонки A, для кожного виділеного рядка (можна кілька, до 20 за раз).
+function sendSelectedLeads() {
+  const ss = SpreadsheetApp.getActive();
+  const ui = SpreadsheetApp.getUi();
+  const sh = ss.getActiveSheet();
+  if (sh.getName() !== CFG.sheetName) return ss.toast('Перейдіть на аркуш «' + CFG.sheetName + '» і виділіть рядок ліда.');
+
+  const lastRow = sh.getLastRow(), rows = [];
+  const sel = sh.getActiveRangeList();
+  (sel ? sel.getRanges() : []).forEach(r => {
+    for (let i = Math.max(r.getRow(), CFG.firstDataRow); i <= Math.min(r.getLastRow(), lastRow); i++) pushUniq_(rows, i);
+  });
+  rows.sort((a, b) => a - b);
+  if (!rows.length) return ss.toast('Виділіть рядок ліда (з ' + CFG.firstDataRow + '-го рядка).');
+  if (rows.length > 20) return ui.alert('Виділено забагато рядків (' + rows.length + '). За один раз — до 20.');
+
+  const plan = [], skipped = [];
+  rows.forEach(row => {
+    const lead = readLead_(sh, row);
+    const key = keyOf_(lead.ts, lead.empTel, lead.ownTel);
+    if (!key) return;                                   // порожній рядок
+    const mrm = String(sh.getRange(row, WORK.respCol).getValue() || '').trim();
+    const to = mrm ? resolveRecipient_(mrm) : '';
+    const what = 'Рядок ' + row + ' · ' + (lead.city || 'місто не вказано');
+    if (!mrm) skipped.push(what + ': не вказано МРМ у колонці A');
+    else if (!to) skipped.push(what + ': немає e-mail для «' + mrm + '» на аркуші «' + MRM.terrSheet + '»');
+    else plan.push({ lead: lead, key: key, mrm: mrm, to: to, what: what });
+  });
+  if (!plan.length) return ui.alert('Лист не надіслано', skipped.join('\n') || 'У виділених рядках немає лідів.', ui.ButtonSet.OK);
+
+  const ans = ui.alert(plan.length === 1 ? 'Надіслати лист?' : 'Надіслати листи (' + plan.length + ')?',
+    plan.map(p => p.what + ' → ' + p.mrm + ' <' + p.to + '>').join('\n') +
+    (skipped.length ? '\n\nБез листа:\n' + skipped.join('\n') : '') +
+    (TEST_MODE ? '\n\nТестовий режим: листи підуть на ' + TEST_EMAIL + '.' : ''),
+    ui.ButtonSet.YES_NO);
+  if (ans !== ui.Button.YES) return;
+
+  const sent = loadSent_(ss), errors = [];
+  let cnt = 0;
+  plan.forEach(p => {
+    try {
+      sendNewLeadEmail_(p.lead, encKey_(p.key), p.mrm);
+      if (!sent.set[p.key]) markSent_(sent, p.key);     // автосинхронізація вже не надішле цей лід удруге
+      cnt++;
+    } catch (err) {
+      errors.push(p.what + ': ' + (err && err.message ? err.message : err));
+    }
+  });
+  if (errors.length) ui.alert('Надіслано: ' + cnt + ' з ' + plan.length, 'Помилки:\n' + errors.join('\n'), ui.ButtonSet.OK);
+  else ss.toast('Надіслано листів: ' + cnt, 'Лист', 6);
 }
 
 // ============================================================
