@@ -24,11 +24,10 @@ const MRM   = { terrSheet: 'Територія МРМ' };
 const MRM_EMAIL_COL = 3;
 
 // ---- Веб-форма / листи ----
-// Розгортання веб-застосунку: «Виконувати як: Я», «Хто має доступ: Будь-хто» — форма відкривається без входу
-// в Google. Інакше Google відкриває її основним акаунтом браузера, і якщо на телефоні той особистий —
-// «На жаль, зараз не вдається відкрити файл». Адреса — без /a/macros/novaposhta.ua/: з доменом Google може
-// все одно вимагати робочий акаунт. (Якщо доступ лише для Нової пошти — …/a/macros/novaposhta.ua/s/<ID>/exec.)
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxqIdWc5wIcyjgMX9bGySsM9JpHQD62VQAudjFwofSVMljMF2j7sIixxCz-jODr0nQZ/exec';
+// Розгортання: «Виконати від імені: мене», «Хто має доступ: Усі в Novaposhta» (варіанта «Будь-хто» в домені немає).
+// Тож форма відкривається лише під корпоративним акаунтом: якщо браузер відкрив її особистим, Google показує
+// «На жаль, зараз не вдається відкрити файл» — тому в листі є підказка. Адреса — як у розгортанні.
+const WEB_APP_URL = 'https://script.google.com/a/macros/novaposhta.ua/s/AKfycbxqIdWc5wIcyjgMX9bGySsM9JpHQD62VQAudjFwofSVMljMF2j7sIixxCz-jODr0nQZ/exec';
 const EMAILS_ENABLED = true;
 const TEST_MODE = false;
 const TEST_EMAIL = 'gurin.vv@novaposhta.ua';
@@ -580,7 +579,10 @@ function leadEmailHtml_(lead, token) {
     + '<div style="margin-top:24px;">'
     + btnHtml(formUrl_(token, 'result'), 'Вказати результат', '#185FA5', '#fff', false) + '&nbsp;&nbsp;'
     + btnHtml(formUrl_(token, 'respawn'), 'Змінити МРМ', '#fff', '#185FA5', true)
-    + '</div></div>'
+    + '</div>'
+    + '<p style="margin:12px 0 0;font-size:12px;color:#888;">Замість форми — «Не вдається відкрити файл»? Браузер відкрив її не корпоративним акаунтом Google. '
+    + 'Утримуйте кнопку, скопіюйте посилання й відкрийте його в режимі інкогніто або в іншому браузері, увійшовши корпоративним акаунтом.</p>'
+    + '</div>'
     + '<div style="padding:12px 20px;background:#f5f5f0;border-top:1px solid #eee;"><p style="margin:0;font-size:12px;color:#999;">Автоматичне сповіщення</p></div></div>';
 }
 
