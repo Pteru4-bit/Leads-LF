@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { margin:0; font-family:Arial,Helvetica,sans-serif; background:#f5f5f0; color:#1a1a1a; }
+  .wrap { max-width:560px; margin:24px auto; padding:0 16px; }
+  .card { background:#fff; border:1px solid #e0ddd3; border-radius:12px; overflow:hidden; }
+  .hd { padding:16px 20px; border-bottom:1px solid #eee; }
+  .hd h1 { margin:0; font-size:17px; font-weight:600; }
+  .hd p { margin:4px 0 0; font-size:13px; color:#666; }
+  .badge { display:inline-block; margin-left:8px; padding:1px 7px; border-radius:6px; background:#E6F1FB;
+    color:#0C447C; font-size:12px; font-weight:600; vertical-align:2px; }
+  .bd { padding:12px 20px 20px; }
+  .row { font-size:14px; padding:8px 0; border-top:1px solid #f0f0f0; display:flex; gap:10px; }
+  .row:first-child { border-top:none; }
+  .row .k { color:#777; width:130px; flex-shrink:0; }
+  .row .v { min-width:0; overflow-wrap:anywhere; }
+  a { color:#185FA5; }
+  a.tel { text-decoration:none; font-weight:600; }
+  details { border-top:1px solid #f0f0f0; }
+  summary { cursor:pointer; padding:10px 0; font-size:13px; color:#185FA5; }
+  details .row:first-of-type { border-top:none; }
+  .cur { margin-top:14px; padding:10px 14px; background:#f5f5f0; border-radius:8px; font-size:13px; color:#555; line-height:1.5; }
+  .cur b { color:#1a1a1a; }
+  .cur .c { margin-top:4px; color:#1a1a1a; white-space:pre-wrap; }
+  .tabs { display:flex; margin-top:18px; border:1px solid #cfcabb; border-radius:8px; overflow:hidden; }
+  .tabs button { flex:1; height:40px; margin:0; border:none; border-radius:0; background:#fff; color:#555;
+    font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
+  .tabs button + button { border-left:1px solid #cfcabb; }
+  .tabs button.on { background:#E6F1FB; color:#0C447C; }
+  label { display:block; font-size:13px; color:#666; margin:14px 0 8px; }
+  label .req { color:#A32D2D; }
+  select, textarea, input[type=date] { width:100%; box-sizing:border-box; padding:10px 12px; font-size:14px;
+    border:1px solid #cfcabb; border-radius:8px; background:#fff; color:#1a1a1a; font-family:inherit; }
+  textarea { resize:vertical; }
+  .invalid { border-color:#A32D2D !important; background:#fff7f7 !important; }
+  .note { margin:8px 0 0; font-size:12px; color:#888; }
+  .err { margin:12px 0 0; font-size:13px; color:#A32D2D; display:none; }
+  .save { margin-top:20px; width:100%; height:44px; background:#185FA5; color:#fff; border:none;
+    border-radius:8px; font-size:15px; font-weight:600; cursor:pointer; font-family:inherit; }
+  .save:disabled { opacity:0.6; cursor:default; }
+  button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible,
+  a:focus-visible, summary:focus-visible { outline:2px solid #185FA5; outline-offset:2px; }
+  .ok { text-align:center; padding:32px 20px; }
+  .ok .ic { font-size:40px; color:#1D9E75; line-height:1; }
+  .ok .ic.bad { color:#A32D2D; }
+  .ok h1 { font-size:18px; margin:12px 0 6px; }
+  .ok p { color:#666; font-size:14px; margin:0; }
+  .warnbox { margin:16px 0 0; padding:14px 16px; background:#FAEEDA; border-radius:8px; font-size:14px; color:#854F0B; text-align:left; }
+  .ok .again { margin-top:18px; font-size:13px; }
+  .formbtn { display:inline-block; margin-top:18px; padding:12px 22px; background:#185FA5; color:#fff;
+    text-decoration:none; border-radius:8px; font-size:15px; font-weight:600; }
+  .thumbs { display:flex; flex-wrap:wrap; gap:8px; }
+  .thumb { width:96px; margin:0; padding:0; border:1px solid #e0ddd3; border-radius:6px; overflow:hidden;
+    background:#f5f5f0; cursor:zoom-in; font-family:inherit; text-align:center; }
+  .thumb img { display:block; width:96px; height:72px; object-fit:cover; }
+  .thumb span { display:block; padding:3px 4px; font-size:11px; color:#555; }
+  .lb { position:fixed; top:0; right:0; bottom:0; left:0; z-index:10; display:flex; align-items:center;
+    justify-content:center; padding:56px 12px 12px; background:rgba(20,20,20,.9); }
+  .lb img { max-width:100%; max-height:100%; border-radius:6px; }
+  .lb .bar { position:absolute; top:10px; left:12px; right:12px; display:flex; align-items:center;
+    justify-content:space-between; color:#fff; font-size:14px; }
+  .lb .bar button { height:36px; padding:0 14px; border:none; border-radius:8px; background:#fff; color:#1a1a1a;
+    font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
+  @media (max-width:420px) { .row .k { width:110px; } .wrap { margin:12px auto; } }
+</style>
+</head>
+<body>
+<div class="wrap"><div id="app"></div></div>
+<script>
+var DATA = <?!= dataJson ?>;
+(function () {
+  var D = DATA || {};
+  var app = document.getElementById('app');
+  var mode = D.action === 'respawn' ? 'respawn' : 'result';
+
+  function el(tag, attrs, kids) {
+    var e = document.createElement(tag);
+    attrs = attrs || {};
+    Object.keys(attrs).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k === 'text') e.textContent = v;
+      else if (k === 'class') e.className = v;
+      else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v);
+    });
+    (kids || []).forEach(function (c) {
+      if (c === null || c === undefined || c === '') return;
+      e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    });
+    return e;
+  }
+  function row(k, v) {
+    if (v === null || v === undefined || v === '') return null;
+    return el('div', { 'class': 'row' }, [
+      el('span', { 'class': 'k', text: k }),
+      typeof v === 'string' ? el('span', { 'class': 'v', text: v }) : el('span', { 'class': 'v' }, [v])
+    ]);
+  }
+  function reqLabel(forId, text, required) {
+    return el('label', { 'for': forId }, [text, required ? ' ' : '', required ? el('span', { 'class': 'req', text: '*' }) : null]);
+  }
+  function setLabel(lbl, text, required) {
+    lbl.textContent = '';
+    lbl.appendChild(document.createTextNode(text));
+    if (required) { lbl.appendChild(document.createTextNode(' ')); lbl.appendChild(el('span', { 'class': 'req', text: '*' })); }
+  }
+
+  if (!D.found) {
+    app.appendChild(el('div', { 'class': 'card' }, [el('div', { 'class': 'ok' }, [
+      el('div', { 'class': 'ic bad', text: '!' }),
+      el('h1', { text: 'Заявку не знайдено' }),
+      el('p', { text: 'Можливо, посилання застаріле або рядок видалено з таблиці.' })
+    ])]));
+    return;
+  }
+
+  function renderDone(r) {
+    var kids = [
+      el('div', { 'class': 'ic', text: '\u2713' }),
+      el('h1', { text: r.title || 'Збережено' }),
+      el('p', { text: r.subtitle || '' })
+    ];
+    if (r.nedozvon) {
+      kids.push(el('div', { 'class': 'warnbox',
+        text: 'Не додзвонилися? Наберіть ще раз пізніше або напишіть власнику у Viber / Telegram на цей номер.' }));
+    }
+    if (r.formUrl) {
+      kids.push(el('a', { 'class': 'formbtn', href: r.formUrl, target: '_blank', rel: 'noopener', text: 'Заповнити форму' }));
+    }
+    if (D.postUrl && D.token) {
+      kids.push(el('p', { 'class': 'again' }, [el('a', { href: D.postUrl + '?t=' + encodeURIComponent(D.token) + '&a=result',
+        target: '_top', text: 'Відкрити заявку ще раз' })]));
+    }
+    app.textContent = '';
+    app.appendChild(el('div', { 'class': 'card' }, [el('div', { 'class': 'ok' }, kids)]));
+    window.scrollTo(0, 0);
+  }
+  if (D.result && D.result.ok) { renderDone(D.result); return; }
+
+  var L = D.lead || {};
+  var cur = L.cur || {};
+
+  // ---- Інформація про пропозицію ----
+  var phone = L.telHref ? el('a', { 'class': 'tel', href: L.telHref, text: L.phone }) : (L.phone || '');
+  // Фото: мініатюри, натискання — перегляд на весь екран (без скачування)
+  var lb = null, lbFrom = null;
+  function closeLb() {
+    if (!lb) return;
+    lb.parentNode.removeChild(lb);
+    lb = null;
+    if (lbFrom) lbFrom.focus();
+  }
+  function openLb(p, from) {
+    closeLb();
+    lbFrom = from;
+    var closeBtn = el('button', { type: 'button', text: 'Закрити', onclick: closeLb });
+    lb = el('div', { 'class': 'lb', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Фото: ' + p.label }, [
+      el('div', { 'class': 'bar' }, [el('span', { text: p.label }), closeBtn]),
+      el('img', { src: p.url, alt: p.label })
+    ]);
+    lb.addEventListener('click', function (e) { if (e.target === lb) closeLb(); });
+    document.body.appendChild(lb);
+    closeBtn.focus();
+  }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLb(); });
+  var photos = null;
+  if (L.photos && L.photos.length) {
+    photos = el('div', { 'class': 'thumbs' });
+    L.photos.forEach(function (p) {
+      var img = el('img', { src: p.url, alt: '', loading: 'lazy' });
+      var b = el('button', { type: 'button', 'class': 'thumb', title: 'Переглянути: ' + p.label }, [img, el('span', { text: p.label })]);
+      b.addEventListener('click', function () { openLb(p, b); });
+      img.addEventListener('error', function () {   // формат, який браузер не показує (напр. HEIC), → посилання
+        if (b.parentNode) b.parentNode.replaceChild(el('a', { href: p.url, target: '_blank', rel: 'noopener', text: p.label + ' (файл)' }), b);
+      });
+      photos.appendChild(b);
+    });
+  }
+  var dealLine = [L.deal, L.price].filter(Boolean).join(' · ');
+  var header = el('div', { 'class': 'hd' }, [
+    el('h1', {}, ['Пропозиція приміщення', L.en ? el('span', { 'class': 'badge', text: 'EN-форма' }) : null]),
+    el('p', { text: [L.name, L.place, L.date].filter(Boolean).join(' · ') })
+  ]);
+  var info = el('div', {}, [
+    row('Телефон', phone),
+    row('Локація', L.location),
+    row('Адреса', L.address),
+    row('Площа', L.area),
+    row('Оренда / продаж', dealLine),
+    row('Фото', photos)
+  ]);
+  var more = el('details', {}, [
+    el('summary', { text: 'Усі деталі пропозиції' }),
+    row('Поверх', L.floor),
+    row('Тип приміщення', L.ptype),
+    row('Під’їзд вантажного авто', L.access),
+    row('Наявність рамп', L.ramps),
+    row('Наявність паркомісць', L.parking),
+    row('Додатково', L.info)
+  ]);
+  var curBox = el('div', { 'class': 'cur' }, [
+    el('div', {}, ['Відповідальний: ', el('b', { text: cur.mrm || 'не визначено' })]),
+    el('div', {}, ['Результат: ', el('b', { text: cur.status || 'ще не вказано' })]),
+    cur.comment ? el('div', { 'class': 'c', text: cur.comment }) : null
+  ]);
+
+  // ---- Перемикач дії ----
+  var tabR = el('button', { type: 'button', role: 'tab', text: 'Вказати результат', onclick: function () { setMode('result'); } });
+  var tabP = el('button', { type: 'button', role: 'tab', text: 'Змінити відповідального', onclick: function () { setMode('respawn'); } });
+  var tabs = el('div', { 'class': 'tabs', role: 'tablist' }, [tabR, tabP]);
+
+  // ---- Форма: збереження переходом за посиланням (GET) — тим самим шляхом, яким форма відкривається з листа.
+  //      Так Google бере робочий акаунт, навіть якщо в браузері їх кілька. ----
+  var form = el('form', { method: 'get', target: '_top', 'accept-charset': 'UTF-8', novalidate: 'novalidate' });
+  if (D.postUrl) form.setAttribute('action', D.postUrl);
+  var hAction = el('input', { type: 'hidden', name: 'act', value: mode });
+  var hNonce = el('input', { type: 'hidden', name: 'n', value: '' });   // одноразовий ключ: без повторного збереження
+  form.appendChild(el('input', { type: 'hidden', name: 't', value: D.token }));
+  form.appendChild(el('input', { type: 'hidden', name: 'a', value: 'save' }));
+  form.appendChild(hAction);
+  form.appendChild(hNonce);
+
+  // ---- МРМ ----
+  var mrmSel = el('select', { id: 'mrm', name: 'mrm' });
+  if (!cur.mrm) mrmSel.appendChild(el('option', { value: '', text: '— оберіть —' }));
+  (D.mrmNames || []).forEach(function (n) {
+    var o = el('option', { value: n, text: n === cur.mrm ? n + ' (поточний)' : n });
+    if (n === cur.mrm) o.selected = true;
+    mrmSel.appendChild(o);
+  });
+  var mrmBox = el('div', {}, [
+    reqLabel('mrm', 'Відповідальний МРМ', true),
+    mrmSel,
+    el('p', { 'class': 'note', text: 'Якщо територія не ваша — оберіть колегу: заявка перейде до нього, і він отримає лист.' })
+  ]);
+
+  // ---- Результат, уточнення, коментар ----
+  var stLabel = el('label', { 'for': 'status' });
+  var stSel = el('select', { id: 'status', name: 'status' }, [el('option', { value: '', text: '— оберіть —' })]);
+  (D.statuses || []).forEach(function (s) { stSel.appendChild(el('option', { value: s, text: s })); });
+  var detBox = el('div');
+  var comLabel = el('label', { 'for': 'comment' });
+  var comTa = el('textarea', { id: 'comment', name: 'comment', rows: '3', maxlength: '1000' });
+  var errBox = el('div', { 'class': 'err', role: 'alert' });
+  var saveBtn = el('button', { type: 'submit', 'class': 'save' });
+  [tabs, mrmBox, stLabel, stSel, detBox, comLabel, comTa, errBox, saveBtn].forEach(function (x) { form.appendChild(x); });
+
+  var formCard = el('div', { 'class': 'card' }, [
+    header,
+    el('div', { 'class': 'bd' }, [info, more, curBox, form])
+  ]);
+  app.appendChild(formCard);
+
+  function clearErr() { errBox.textContent = ''; errBox.style.display = 'none'; }
+  function showErr(m) { errBox.textContent = m; errBox.style.display = 'block'; }
+  function saveText() { return mode === 'result' ? 'Зберегти результат' : 'Зберегти'; }
+  function busy() { saveBtn.disabled = true; saveBtn.textContent = 'Збереження…'; }
+  function resetBtn() { saveBtn.disabled = false; saveBtn.textContent = saveText(); }
+  function watch(x) {
+    ['input', 'change'].forEach(function (ev) {
+      x.addEventListener(ev, function () { x.classList.remove('invalid'); clearErr(); });
+    });
+  }
+
+  function renderDetails() {
+    detBox.textContent = '';
+    var det = (D.details || {})[stSel.value];
+    if (!det) return;
+    var dSel = el('select', { id: 'detail', name: 'detail' }, [el('option', { value: '', text: '— оберіть —' })]);
+    det.options.forEach(function (o) { dSel.appendChild(el('option', { value: o, text: o })); });
+    detBox.appendChild(reqLabel('detail', det.label, true));
+    detBox.appendChild(dSel);
+    watch(dSel);
+    if (det.needsDate) {
+      var t = new Date();
+      var today = t.getFullYear() + '-' + ('0' + (t.getMonth() + 1)).slice(-2) + '-' + ('0' + t.getDate()).slice(-2);
+      var dIn = el('input', { type: 'date', id: 'nextDate', name: 'nextDate', min: today });
+      detBox.appendChild(reqLabel('nextDate', 'Дата наступного кроку', true));
+      detBox.appendChild(dIn);
+      watch(dIn);
+    }
+  }
+
+  function setMode(m) {
+    mode = m;
+    hAction.value = m;
+    tabR.className = m === 'result' ? 'on' : '';
+    tabP.className = m === 'respawn' ? 'on' : '';
+    tabR.setAttribute('aria-selected', String(m === 'result'));
+    tabP.setAttribute('aria-selected', String(m === 'respawn'));
+    mrmBox.style.display = m === 'respawn' ? '' : 'none';
+    mrmSel.disabled = m !== 'respawn';   // у режимі результату МРМ не передається
+    setLabel(stLabel, m === 'result' ? 'Результат' : 'Результат (за наявності)', m === 'result');
+    setLabel(comLabel, 'Коментар', m === 'result');
+    comTa.placeholder = m === 'result'
+      ? 'Підсумок розмови з власником приміщення (обов’язково)'
+      : 'Що вже відомо: домовленості, підсумок дзвінка…';
+    [mrmSel, stSel, comTa].forEach(function (x) { x.classList.remove('invalid'); });
+    clearErr();
+    resetBtn();
+  }
+
+  function values() {
+    var dSel = document.getElementById('detail'), dIn = document.getElementById('nextDate');
+    return {
+      token: D.token, action: mode, mrm: mode === 'respawn' ? mrmSel.value : '',
+      status: stSel.value, detail: dSel ? dSel.value : '', nextDate: dIn ? dIn.value : '', comment: comTa.value.trim()
+    };
+  }
+  function validate() {
+    var v = values(), det = (D.details || {})[v.status], bad = [];
+    if (mode === 'respawn' && !v.mrm) bad.push([mrmSel, 'Оберіть відповідального МРМ.']);
+    if (mode === 'result' && !v.status) bad.push([stSel, 'Оберіть результат.']);
+    if (det) {
+      if (!v.detail) bad.push([document.getElementById('detail'), 'Оберіть: ' + det.label.toLowerCase() + '.']);
+      if (det.needsDate && !v.nextDate) bad.push([document.getElementById('nextDate'), 'Вкажіть дату наступного кроку.']);
+    }
+    if (mode === 'result' && !v.comment) bad.push([comTa, 'Заповніть коментар перед збереженням.']);
+    if (!bad.length) return true;
+    bad.forEach(function (b) { if (b[0]) b[0].classList.add('invalid'); });
+    showErr(bad[0][1]);
+    if (bad[0][0]) bad[0][0].focus();
+    return false;
+  }
+
+  form.addEventListener('submit', function (ev) {
+    clearErr();
+    if (saveBtn.disabled || !validate()) { ev.preventDefault(); return; }
+    if (!D.postUrl) { ev.preventDefault(); rpcSave(); return; }   // запасний шлях, якщо URL не вказано
+    hNonce.value = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    setTimeout(busy, 0);                                          // форма йде переходом за посиланням
+  });
+  // повернення «Назад» зі сторінки результату — кнопка знову активна
+  window.addEventListener('pageshow', function (e) { if (e.persisted) resetBtn(); });
+
+  // Запасний шлях: google.script.run із тайм-аутом (без вічного «Збереження…»)
+  function rpcSave() {
+    busy();
+    var finished = false;
+    var fail = function (m) { finished = true; clearTimeout(timer); showErr(m); resetBtn(); };
+    var timer = setTimeout(function () {
+      if (finished) return;
+      fail('Таблиця не відповідає. Перевірте колонку C — можливо, вже збережено. Якщо в браузері відкрито кілька ' +
+        'акаунтів Google, відкрийте посилання у вікні, де ви увійшли лише робочим акаунтом.');
+    }, D.rpcTimeoutMs || 45000);
+    try {
+      google.script.run
+        .withSuccessHandler(function (r) { finished = true; clearTimeout(timer); onSaved(r); })
+        .withFailureHandler(function (e) { fail('Помилка: ' + (e && e.message ? e.message : e)); })
+        .saveForm(values());
+    } catch (e) {
+      fail('Не вдалося зв’язатися з таблицею: ' + (e && e.message ? e.message : e));
+    }
+  }
+  function onSaved(r) {
+    if (!r || !r.ok) { showErr((r && r.message) || 'Не вдалося зберегти.'); resetBtn(); return; }
+    renderDone(r);
+  }
+
+  stSel.addEventListener('change', renderDetails);
+  [mrmSel, stSel, comTa].forEach(watch);
+  setMode(mode);
+
+  // Після POST з помилкою: повертаємо введене і показуємо, що не так
+  if (D.result && !D.result.ok) {
+    var pf = D.prefill || {};
+    if (pf.mrm) mrmSel.value = pf.mrm;
+    if (pf.status) { stSel.value = pf.status; renderDetails(); }
+    if (pf.detail && document.getElementById('detail')) document.getElementById('detail').value = pf.detail;
+    if (pf.nextDate && document.getElementById('nextDate')) document.getElementById('nextDate').value = pf.nextDate;
+    if (pf.comment) comTa.value = pf.comment;
+    showErr(D.result.message || 'Не вдалося зберегти.');
+  }
+})();
+</script>
+</body>
+</html>
